@@ -420,7 +420,11 @@ class SimParam:
         compare_list.insert(0, self)
 
         dct_simparam = {
-            simparam.schedule.loc[0, "Flight Date"].year: simparam
+            (
+                simparam.plot_name
+                if hasattr(simparam, "plot_name")
+                else simparam.schedule.loc[0, "Flight Date"].year
+            ): simparam
             for simparam in compare_list
         }
 
