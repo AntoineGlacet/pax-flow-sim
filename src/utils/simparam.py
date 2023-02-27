@@ -89,6 +89,7 @@ class SimParam:
         self.schedule["Scheduled Time"] = pd.to_datetime(
             self.schedule["Scheduled Time"],
         )
+        self.schedule["Flight Date"] = pd.to_datetime(self.schedule["Flight Date"])
         # to catch up some formatting mistakes from beontra extracts...
         self.schedule["Flight Number"] = self.schedule["Flight Number"].replace(
             ["JX821"],
@@ -100,8 +101,8 @@ class SimParam:
         )
         # split Airline Code
         self.schedule["Airline Code"] = self.schedule["Flight Number"].str.split(
-            " ",
-            1,
+            pat=" ",
+            n=1,
             expand=True,
         )[0]
         # bad formatting of 0 pax flight I guess? for JAL 8126
@@ -318,9 +319,7 @@ class SimParam:
         # create a df over 3 days to avoid errors for flights close to midnight
         df_Seats = pd.DataFrame.from_dict(dct_Seats)
         df_Counters = df_Seats * 0
-        df_Counters_3d = (
-            df_Counters.append(df_Counters).append(df_Counters).reset_index(drop=True)
-        )
+        df_Counters_3d = pd.concat([df_Counters] * 3, ignore_index=True)
 
         offset = 288
 
@@ -547,9 +546,10 @@ class SimParam:
                     .set_index("Scheduled Time", drop=False)["PAX_SUM FC"]
                     .resample(freq)
                     .agg(["sum"])
+                    .reindex(index=date_range)
                     .rolling(window=win, center=True)
                     .mean()
-                    .dropna()
+                    .fillna(0)
                     .apply(lambda x: x * ratio_sampling)
                     for i in range(len(categories))
                 }
@@ -560,9 +560,10 @@ class SimParam:
                     ]
                     .resample(freq)
                     .agg(["sum"])
+                    .reindex(index=date_range)
                     .rolling(window=win, center=True)
                     .mean()
-                    .dropna()
+                    .fillna(0)
                     .apply(lambda x: x * ratio_sampling)
                 )
             # plot

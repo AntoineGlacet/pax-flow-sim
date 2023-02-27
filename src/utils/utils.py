@@ -47,7 +47,7 @@ def day_graph():
     k_com = tick.FuncFormatter(lambda x, p: format(int(x), ","))
 
     # formatting
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(6, 3))
     ax.set_xlim((xmin, xmax))
     ax.set_xticks(pd.date_range(xmin, xmax, freq="30min"))
     ax.set_xticklabels(ax.get_xticks(), rotation=45, **{"horizontalalignment": "right"})

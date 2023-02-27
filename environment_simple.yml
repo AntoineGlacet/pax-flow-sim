@@ -1,0 +1,18 @@
+name: pax-flow-sim
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - pandas
+  - seaborn
+  - simpy
+  - tqdm
+  - matplotlib
+  - python-decouple
+  - scipy
+  - black
+  - ipykernel
+  - flake8
+  - nbstripout
+  - pre_commit
+  - openpyxl

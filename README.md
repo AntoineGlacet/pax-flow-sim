@@ -53,9 +53,9 @@ Quick start guide
 
 ```bash
 # 1. clone the repo
-git clone https://github.com/AntoineGlacet/KAPpaxsim.git
+git clone https://github.com/AntoineGlacet/pax-flow-sim.git
 # 2. create a new conda environment from environment.yml
-cd KAPpaxsim
+cd pax-flow-sim
 conda env create --file environment.yml
 # 3. install source code
 pip install -e .

@@ -5,3 +5,11 @@
 - review plot functions code for concision
 
 - graph for 'wait for opening'
+
+
+# for check-in study
+
+- df_Counters index to Datetime
+- graph for 'wait for opening'
+- simulation to records (record every minute when running the simulation)
+
