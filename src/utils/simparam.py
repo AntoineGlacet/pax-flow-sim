@@ -330,12 +330,11 @@ class SimParam:
                 if df_Seats.iloc[i, col] != 0:
                     # Wee check from 45 minutes to 2.5 hours before STD
                     for j in range(start_slot, onecounter_slot):
-                        # for each cell, if there is already a number
-                        # we put add the seats
-                        df_Counters_3d.iloc[i + offset + j, col] = (
-                            df_Counters_3d.iloc[i + offset + j, col]
-                            + df_Seats.iloc[i, col]
-                        )
+                        # for each cell, we add the seats
+                        df_Counters_3d.iloc[i + offset + j, col] += df_Seats.iloc[
+                            i, col
+                        ]
+
         # now we have a table with seats, let's apply the rule
         # valid on that period
         for col in range(len(df_Counters_3d.columns)):
@@ -349,6 +348,146 @@ class SimParam:
                             (df_Counters_3d.iloc[i, col] - 201) // seats_per_add_counter
                         ),
                     )
+
+        # Then we do the last 45 minutes
+        for col in range(len(df_Seats.columns)):
+            for i in range(len(df_Seats.index)):
+                # When we see a cell with Seats for a flight
+                if df_Seats.iloc[i, col] != 0:
+                    # we check from STD to 45 minutes before
+                    for j in range(onecounter_slot, 1):
+                        # only if no other flights are checking in, do we add a counter
+                        if df_Counters_3d.iloc[i + offset + j, col] == 0:
+                            df_Counters_3d.iloc[i + offset + j, col] = 1
+
+        # merge into only 1d
+        df_Counters_final = df_Counters.copy()
+        for i in range(len(df_Counters_final.index)):
+            df_Counters_final.iloc[i, :] = (
+                df_Counters_3d.iloc[i, :]
+                + df_Counters_3d.iloc[i + offset, :]
+                + df_Counters_3d.iloc[i + 2 * offset, :]
+            )
+        df_Counters_final["total"] = df_Counters_final.sum(axis=1)
+
+        self.df_Counters = df_Counters_final
+
+        # we need dct_Counters_change
+        # { airline : series of time/n_counter when change }
+        self.dct_Counters_change = {
+            airline: self.df_Counters[airline].loc[
+                self.df_Counters[airline].shift() != self.df_Counters[airline]
+            ]
+            for airline in self.schedule["Airline Code"].unique()
+        }
+
+        return self
+
+    def assign_new_check_in(
+        self,
+        start_time: float = 3,
+        start_timey: float = 2 + 40 / 60,
+        stop_timey: float = 1 + 20 / 60,
+        onecounter_time: float = 0.75,
+        base_n_counter: float = 2,
+        seats_per_add_counter: float = 60,
+    ):
+        """
+        with the new rule (see PowerPoint)
+        """
+        # convenience function for counter number
+        def new_rule_counters(
+            seats: int,
+            base_n_counter: int = base_n_counter,
+            seats_per_add_counter: int = seats_per_add_counter,
+        ):
+            x = base_n_counter
+            y = base_n_counter
+
+            if seats > 200:
+                extra_seats = seats - 200
+                n = extra_seats // 60 + 1
+                if n % 2 == 1:
+                    y += n // 2 + 1
+                    x += n // 2
+                else:
+                    x += n // 2
+                    y += n // 2
+
+            return x, y
+
+        # change to 5-minutes slot unit
+        onecounter_slot = -int(((onecounter_time) * 60) // 5)
+        start_slot = -int(((start_time) * 60) // 5)
+        start_sloty = -int(((start_timey) * 60) // 5)
+        stop_sloty = -int(((stop_timey) * 60) // 5)
+
+        # create a dictionnary of airline and seats per 5 minutes
+        dct_Seats = {airline: [0] * 288 for airline in self.schedule["Airline Code"]}
+
+        # go through all flights
+        for flight_number in self.schedule["Flight Number"]:
+            mask = self.schedule["Flight Number"] == flight_number
+            airline = self.schedule.loc[mask, "Airline Code"].iat[0]
+            STD_5min = (
+                self.schedule.loc[mask, "Scheduled Time"]
+                .apply(lambda x: (x.hour * 60 + x.minute) // 5)
+                .iat[0]
+            )
+
+            # we add number of seats to 5-minute rounded STD position in dct_Seats
+            dct_Seats[airline][STD_5min] += self.schedule[(mask)]["SEATS FC"].iat[0]
+
+        # create a df over 3 days to avoid errors for flights close to midnight
+        df_Seats = pd.DataFrame.from_dict(dct_Seats)
+        df_Counters = df_Seats * 0
+        df_Counters_3d = pd.concat([df_Counters] * 3, ignore_index=True)
+        df_Counters_3d_Y = df_Counters_3d.copy()
+
+        offset = 288
+
+        # First we add the seats for 3=>0.75 hours before STD (=X)
+        for col in range(len(df_Seats.columns)):
+            for i in range(len(df_Seats.index)):
+                # When we see a cell with Seats for a flight
+                if df_Seats.iloc[i, col] != 0:
+                    # Wee check from 45 minutes to 3 hours before STD
+                    for j in range(start_slot, onecounter_slot):
+                        # for each cell, we add the seats
+                        df_Counters_3d.iloc[i + offset + j, col] += df_Seats.iloc[
+                            i, col
+                        ]
+
+        # now we have a table with seats, let's apply the rule
+        # valid on that period (=X)
+        for col in range(len(df_Counters_3d.columns)):
+            for i in range(len(df_Counters_3d.index)):
+                if df_Counters_3d.iloc[i, col] > 0:
+                    x, _ = new_rule_counters(df_Counters_3d.iloc[i, col])
+                    df_Counters_3d.iloc[i, col] = x
+
+        # First we add the seats for 3=>0.75 hours before STD (=Y)
+        for col in range(len(df_Seats.columns)):
+            for i in range(len(df_Seats.index)):
+                # When we see a cell with Seats for a flight
+                if df_Seats.iloc[i, col] != 0:
+                    # Wee check from start to stop of Y
+                    for j in range(start_sloty, stop_sloty):
+                        # for each cell, we add the seats
+                        df_Counters_3d_Y.iloc[i + offset + j, col] += df_Seats.iloc[
+                            i, col
+                        ]
+
+        # now we have a table with seats, let's apply the rule
+        # valid on that period (=Y)
+        for col in range(len(df_Counters_3d_Y.columns)):
+            for i in range(len(df_Counters_3d_Y.index)):
+                if df_Counters_3d_Y.iloc[i, col] > 0:
+                    _, y = new_rule_counters(df_Counters_3d_Y.iloc[i, col])
+                    df_Counters_3d_Y.iloc[i, col] = y
+
+        # add the 2 dataframes
+        df_Counters_3d = df_Counters_3d.add(df_Counters_3d_Y, fill_value=0)
 
         # Then we do the last 45 minutes
         for col in range(len(df_Seats.columns)):
